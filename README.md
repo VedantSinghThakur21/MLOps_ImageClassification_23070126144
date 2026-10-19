@@ -1,7 +1,7 @@
 # Image Classification DVC
 
-**Author**: Tanniru Hari Sri Shanmukha Sai  
-**PRN**: 23070126135
+**Author**: Vedant Singh Thakur  
+**PRN**: 23070126144
 
 ## Project Overview
 
