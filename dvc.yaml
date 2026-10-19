@@ -1,0 +1,91 @@
+stages:
+  data_collection:
+    cmd: python -m src.data_collection
+    deps:
+      - src/data_collection.py
+      - src/utils.py
+      - params.yaml
+    params:
+      - dataset_url
+      - dataset_path
+      - artifacts_path
+      - seed
+    outs:
+      - data/raw
+
+  data_processing:
+    cmd: python -m src.data_processing
+    deps:
+      - src/data_processing.py
+      - src/utils.py
+      - params.yaml
+      - data/raw
+    params:
+      - processed_path
+      - image_size
+      - batch_size
+      - validation_split
+      - test_split
+      - rotation_range
+      - zoom_range
+      - horizontal_flip
+      - brightness_range
+      - seed
+      - use_augmentation
+    outs:
+      - data/processed
+      - artifacts/processed
+
+  feature_selection:
+    cmd: python -m src.feature_selection
+    deps:
+      - src/feature_selection.py
+      - src/utils.py
+      - params.yaml
+      - data/processed
+    params:
+      - image_size
+      - model_name
+      - freeze_base_model
+      - fine_tune_at
+    outs:
+      - artifacts/features
+
+  model_training:
+    cmd: python -m src.model_training
+    deps:
+      - src/model_training.py
+      - src/utils.py
+      - params.yaml
+      - data/processed
+      - artifacts/features
+    params:
+      - batch_size
+      - epochs
+      - learning_rate
+      - optimizer
+      - dropout_rate
+      - dense_units
+      - loss_function
+      - metrics
+      - model_name
+      - seed
+    outs:
+      - artifacts/model
+
+  model_evaluation:
+    cmd: python -m src.model_evaluation
+    deps:
+      - src/model_evaluation.py
+      - src/utils.py
+      - params.yaml
+      - data/processed
+      - artifacts/model
+    params:
+      - batch_size
+      - metrics
+      - seed
+    metrics:
+      - artifacts/metrics/metrics.json
+    outs:
+      - artifacts/metrics/confusion_matrix.png

@@ -1,0 +1,200 @@
+schema: '2.0'
+stages:
+  data_collection:
+    cmd: python -m src.data_collection
+    deps:
+    - path: params.yaml
+      hash: md5
+      md5: 8a58ae5528fd9d5e43853d07df62579b
+      size: 945
+    - path: src/data_collection.py
+      hash: md5
+      md5: c3575fac6f658a70d2873772c47545af
+      size: 3182
+    - path: src/utils.py
+      hash: md5
+      md5: 82b2ab57247b81cec9170fe8ae35ee22
+      size: 2450
+    params:
+      params.yaml:
+        artifacts_path: artifacts
+        dataset_path: data/raw
+        dataset_url: 
+          https://www.kaggle.com/datasets/rahmasleam/intel-image-dataset
+        seed: 42
+    outs:
+    - path: data/raw
+      hash: md5
+      md5: dd00cd7eb15244555b57a1d3cc013bef.dir
+      size: 45382818
+      nfiles: 3000
+  data_processing:
+    cmd: python -m src.data_processing
+    deps:
+    - path: data/raw
+      hash: md5
+      md5: dd00cd7eb15244555b57a1d3cc013bef.dir
+      size: 45382818
+      nfiles: 3000
+    - path: params.yaml
+      hash: md5
+      md5: 8a58ae5528fd9d5e43853d07df62579b
+      size: 945
+    - path: src/data_processing.py
+      hash: md5
+      md5: 9540b00fa4534a3e25534313912d316d
+      size: 5816
+    - path: src/utils.py
+      hash: md5
+      md5: 82b2ab57247b81cec9170fe8ae35ee22
+      size: 2450
+    params:
+      params.yaml:
+        batch_size: 32
+        brightness_range:
+        - 0.8
+        - 1.2
+        horizontal_flip: true
+        image_size:
+        - 224
+        - 224
+        processed_path: data/processed
+        rotation_range: 20
+        seed: 42
+        test_split: 0.1
+        use_augmentation: true
+        validation_split: 0.2
+        zoom_range: 0.2
+    outs:
+    - path: artifacts/processed
+      hash: md5
+      md5: b84687928ef62ba929abf3eeea9421cc.dir
+      size: 221
+      nfiles: 1
+    - path: data/processed
+      hash: md5
+      md5: 7d54456471adc14f2f23a4ddaa10b6b4.dir
+      size: 75581758
+      nfiles: 3000
+  feature_selection:
+    cmd: python -m src.feature_selection
+    deps:
+    - path: data/processed
+      hash: md5
+      md5: 7d54456471adc14f2f23a4ddaa10b6b4.dir
+      size: 75581758
+      nfiles: 3000
+    - path: params.yaml
+      hash: md5
+      md5: 8a58ae5528fd9d5e43853d07df62579b
+      size: 945
+    - path: src/feature_selection.py
+      hash: md5
+      md5: dff6fa68107f32b75abc2ed3316ca361
+      size: 2246
+    - path: src/utils.py
+      hash: md5
+      md5: 82b2ab57247b81cec9170fe8ae35ee22
+      size: 2450
+    params:
+      params.yaml:
+        fine_tune_at: 100
+        freeze_base_model: true
+        image_size:
+        - 224
+        - 224
+        model_name: mobilenetv2_intel_classifier
+    outs:
+    - path: artifacts/features
+      hash: md5
+      md5: d3e202c259cbc939b6e36ee1915d6e6e.dir
+      size: 9609832
+      nfiles: 1
+  model_training:
+    cmd: python -m src.model_training
+    deps:
+    - path: artifacts/features
+      hash: md5
+      md5: d3e202c259cbc939b6e36ee1915d6e6e.dir
+      size: 9609832
+      nfiles: 1
+    - path: data/processed
+      hash: md5
+      md5: 7d54456471adc14f2f23a4ddaa10b6b4.dir
+      size: 75581758
+      nfiles: 3000
+    - path: params.yaml
+      hash: md5
+      md5: 8a58ae5528fd9d5e43853d07df62579b
+      size: 945
+    - path: src/model_training.py
+      hash: md5
+      md5: 1ef9c71672890e88153f4d34c0bd1b3d
+      size: 4631
+    - path: src/utils.py
+      hash: md5
+      md5: 82b2ab57247b81cec9170fe8ae35ee22
+      size: 2450
+    params:
+      params.yaml:
+        batch_size: 32
+        dense_units: 256
+        dropout_rate: 0.3
+        epochs: 15
+        learning_rate: 0.0001
+        loss_function: categorical_crossentropy
+        metrics:
+        - accuracy
+        - precision
+        - recall
+        model_name: mobilenetv2_intel_classifier
+        optimizer: adam
+        seed: 42
+    outs:
+    - path: artifacts/model
+      hash: md5
+      md5: b3b1a9dd35dc35a321212df074cd7f18.dir
+      size: 27228184
+      nfiles: 4
+  model_evaluation:
+    cmd: python -m src.model_evaluation
+    deps:
+    - path: artifacts/model
+      hash: md5
+      md5: b3b1a9dd35dc35a321212df074cd7f18.dir
+      size: 27228184
+      nfiles: 4
+    - path: data/processed
+      hash: md5
+      md5: 7d54456471adc14f2f23a4ddaa10b6b4.dir
+      size: 75581758
+      nfiles: 3000
+    - path: params.yaml
+      hash: md5
+      md5: 8a58ae5528fd9d5e43853d07df62579b
+      size: 945
+    - path: src/model_evaluation.py
+      hash: md5
+      md5: f973a324d314d13614d3359629046744
+      size: 3412
+    - path: src/utils.py
+      hash: md5
+      md5: 82b2ab57247b81cec9170fe8ae35ee22
+      size: 2450
+    params:
+      params.yaml:
+        batch_size: 32
+        metrics:
+        - accuracy
+        - precision
+        - recall
+        seed: 42
+    outs:
+    - path: artifacts/metrics/confusion_matrix.png
+      hash: md5
+      md5: bad0c1359fe81161f3457a67cdeafcb0
+      size: 38493
+    - path: artifacts/metrics/metrics.json
+      hash: md5
+      md5: 604c9726fd6e6dde0cc122cc35b48d78
+      size: 142

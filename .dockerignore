@@ -1,0 +1,5 @@
+*
+!app.py
+!params.yaml
+!requirements-app.txt
+!artifacts/model/mobilenetv2_intel_classifier.keras

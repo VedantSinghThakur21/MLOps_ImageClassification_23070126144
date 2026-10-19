@@ -1,0 +1,85 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-test:
+    name: DVC pull, Docker build and smoke test
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install DVC
+        run: pip install "dvc[s3]"
+
+      - name: Pull trained model and metrics from S3 (DVC remote)
+        run: dvc pull model_training model_evaluation
+
+      - name: Show DVC pipeline and metrics
+        run: |
+          dvc dag
+          dvc metrics show
+
+      - name: Build Docker image
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          docker build -t "ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" -t "ghcr.io/${GITHUB_REPOSITORY,,}:latest" .
+
+      - name: Smoke test container
+        run: |
+          docker run -d --name app -p 8080:8080 "$IMAGE:latest"
+          for i in $(seq 1 30); do curl -fs localhost:8080/health && break; sleep 2; done
+          curl -fs -F file=@samples/forest.jpg localhost:8080/predict | tee prediction.json
+          python -c "import json; r = json.load(open('prediction.json')); assert r['label'] == 'forest', r"
+
+      - name: Container logs
+        if: always()
+        run: docker logs app || true
+
+      - name: Push image to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:latest"
+
+  deploy:
+    name: Deploy to AWS EC2
+    needs: build-test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ubuntu
+    steps:
+      - name: Deploy container over SSH
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}"
+          install -m 600 /dev/null key.pem
+          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
+          ssh -i key.pem -o StrictHostKeyChecking=accept-new "$EC2_USER@$EC2_HOST" "
+            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin &&
+            docker pull $IMAGE &&
+            docker logout ghcr.io &&
+            (docker rm -f image-classifier || true) &&
+            docker run -d --name image-classifier --restart unless-stopped -p 80:8080 $IMAGE &&
+            docker image prune -af
+          "
+
+      - name: Verify public endpoint
+        run: curl -fs --retry 20 --retry-delay 6 --retry-all-errors "http://$EC2_HOST/health"
