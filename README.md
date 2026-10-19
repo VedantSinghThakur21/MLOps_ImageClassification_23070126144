@@ -35,6 +35,11 @@ Image-Classification-DVC/
 │   ├── model_training.py
 │   ├── config.py
 │   └── utils.py
+├── .github/workflows/ci-cd.yaml
+├── samples/
+├── app.py
+├── Dockerfile
+├── requirements-app.txt
 ├── dvc.yaml
 ├── dvc.lock
 ├── main.py
@@ -134,4 +139,52 @@ Recommended folders to exclude from the zip:
 
 ## Dataset Note
 
-The project is configured for Kaggle-based dataset retrieval. If Kaggle authentication is unavailable, place the dataset manually in `data/raw/` before running the pipeline.
+The `data_collection` stage downloads the public Kaggle dataset through Kaggle's download API, so no Kaggle credentials are required. If the download fails, place the dataset manually in `data/raw/` before running the pipeline.
+
+## DVC Remote (AWS S3)
+
+Pipeline artifacts are versioned in the S3 bucket `mlops-imgcls-23070126144` (region `ap-south-1`):
+
+```bash
+dvc remote add -d storage s3://mlops-imgcls-23070126144/dvcstore
+dvc remote modify storage region ap-south-1
+dvc push feature_selection model_training model_evaluation
+dvc pull model_training model_evaluation   # fetch the trained model and metrics
+```
+
+## Web Application
+
+[app.py](app.py) is a Flask app that serves the trained model:
+
+- `GET /` upload page that shows the predicted class and per-class probabilities
+- `POST /predict` JSON API, e.g. `curl -F file=@samples/forest.jpg http://localhost:8080/predict`
+- `GET /health` health check
+
+Run it in Docker after `dvc pull`:
+
+```bash
+docker build -t image-classifier .
+docker run -p 8080:8080 image-classifier
+```
+
+## CI/CD and Deployment (GitHub Actions + AWS EC2)
+
+[.github/workflows/ci-cd.yaml](.github/workflows/ci-cd.yaml) runs on every push to `main`:
+
+1. `dvc pull` the trained model and metrics from S3, then print `dvc dag` and `dvc metrics show`
+2. Build the Docker image and smoke test it (`samples/forest.jpg` must be classified as `forest`)
+3. Push the image to GitHub Container Registry (`ghcr.io`)
+4. SSH into the EC2 instance, pull the image and run it on port 80, then check `/health` on the public IP
+
+Required repository secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (read access to the bucket), `EC2_HOST` (public IP) and `EC2_SSH_KEY` (contents of the EC2 key pair `.pem`).
+
+The EC2 instance (Ubuntu, t2.micro) is bootstrapped with this user-data script, which installs Docker and adds swap so TensorFlow fits in 1 GB of RAM:
+
+```bash
+#!/bin/bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+apt-get update -y && apt-get install -y docker.io
+systemctl enable --now docker
+usermod -aG docker ubuntu
+```
